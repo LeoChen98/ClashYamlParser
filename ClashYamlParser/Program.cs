@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
@@ -7,6 +8,8 @@ using YamlDotNet.Serialization.NamingConventions;
 
 ConcurrentQueue<string> log_temp = new();
 string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
+
+await log($"{Assembly.GetExecutingAssembly().GetName().Version}","version");
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
@@ -49,12 +52,14 @@ async void ProcessRequest(IAsyncResult ar)
                 string origin_YAML = origin_response.Item1;
                 string parser_YAML = await File.ReadAllTextAsync("parser.yaml", Encoding.UTF8);
                 string result_YAML = CombineYAML(origin_YAML, parser_YAML);
+                context.Response.Headers.Add("Cache-Control", "no-cache");
+                context.Response.Headers.Add("Subscription-Userinfo", origin_response.Item3);
                 SendResponseString(context, result_YAML, content_type: "application/octet-stream", content_disposition: $"attachment; filename={origin_response.Item2}");
                 break;
 
             default:
                 SendResponseString(context, "API Not Found!", 404);
-                await log($"Bad request: API not found.{context.Request.Url}","error");
+                await log($"Bad request: API not found.{context.Request.Url}", "error");
                 break;
         }
     }
@@ -146,12 +151,12 @@ void SendResponseString(HttpListenerContext context, string? str_data = null, in
     SendResponse(context, data, status_code, content_type, str_encoding, content_disposition);
 }
 
-async Task<(string, string)> GetOriginYAMLAsync(string url)
+async Task<(string, string, string)> GetOriginYAMLAsync(string url)
 {
     using (HttpClient httpClient = new HttpClient())
     {
         var response = await httpClient.GetAsync(url);
-        return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml");
+        return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml", response.Headers.GetValues("Subscription-Userinfo").First());
     }
 }
 

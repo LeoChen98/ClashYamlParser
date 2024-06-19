@@ -11,7 +11,7 @@
     <Company>zhangbudademao.com</Company>
     <Copyright>Copyrights © 2024 zhangbudademao.com all rights reserved.</Copyright>
     <Version>$(AssemblyVersion)</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <AssemblyVersion>1.0.1.1</AssemblyVersion>
     <VersionPrefix>$(AssemblyVersion)</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <FileVersion>$(AssemblyVersion)</FileVersion>
