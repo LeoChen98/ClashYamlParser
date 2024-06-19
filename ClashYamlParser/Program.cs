@@ -1,8 +1,12 @@
-﻿
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
-using YamlDotNet.Serialization.NamingConventions;
+using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
+
+ConcurrentQueue<string> log_temp = new();
+string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
@@ -12,14 +16,17 @@ foreach (string domain in await File.ReadAllLinesAsync("domains.txt"))
     server.Prefixes.Add(domain);
 }
 
+await log("Sever stared.");
 server.Start();
 server.BeginGetContext(ProcessRequest, server);
 
-await Task.Run(() =>
+await Task.Run(async () =>
 {
     while (Console.ReadLine() != "/exit")
     {
     }
+
+    await log("Application exited.", flush: true);
 });
 
 async void ProcessRequest(IAsyncResult ar)
@@ -31,35 +38,45 @@ async void ProcessRequest(IAsyncResult ar)
         ArgumentNullException.ThrowIfNull(context, "context");
         ArgumentNullException.ThrowIfNull(context.Request, "context.Request");
         ArgumentNullException.ThrowIfNull(context.Request.Url, "context.Request.Url");
+        await log($"Request: {context.Request.Url}");
         switch (context.Request.Url.AbsolutePath.ToLower())
         {
             case "/clash":
             case "/clash/":
                 string? subscribe_url = context.Request.QueryString["url"];
                 ArgumentException.ThrowIfNullOrWhiteSpace(subscribe_url, "url");
-                string origin_YAML = await GetOriginYAMLAsync(subscribe_url);
-                string parser_YAML = await File.ReadAllTextAsync("parser.yaml");
+                var origin_response = await GetOriginYAMLAsync(subscribe_url);
+                string origin_YAML = origin_response.Item1;
+                string parser_YAML = await File.ReadAllTextAsync("parser.yaml", Encoding.UTF8);
                 string result_YAML = CombineYAML(origin_YAML, parser_YAML);
-                SendResponseString(context, result_YAML, content_type: "application/octet-stream");
+                SendResponseString(context, result_YAML, content_type: "application/octet-stream", content_disposition: $"attachment; filename={origin_response.Item2}");
                 break;
 
             default:
                 SendResponseString(context, "API Not Found!", 404);
+                await log($"Bad request: API not found.{context.Request.Url}","error");
                 break;
         }
     }
     catch (ArgumentException ex)
     {
         SendResponseString(context, $"Bad request: {ex.Message}", 400);
+        await log($"Bad request: ArgumentException.{ex.Message}", "error");
     }
     catch (Exception ex)
     {
         SendResponseString(context, $"Internal Exception:{ex.Message}", 500);
+        await log($"Internal Exception:{ex.Message}", "error");
     }
 }
-void SendResponse(HttpListenerContext context, byte[]? data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "")
+void SendResponse(HttpListenerContext context, byte[]? data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "", string content_disposition = "")
 {
     context.Response.StatusCode = status_code;
+
+    if (!string.IsNullOrEmpty(content_disposition))
+    {
+        context.Response.AddHeader("Content-Disposition", content_disposition);
+    }
 
     if (string.IsNullOrEmpty(str_encoding))
     {
@@ -78,7 +95,31 @@ void SendResponse(HttpListenerContext context, byte[]? data = null, int status_c
     context.Response.Close();
 }
 
-void SendResponseString(HttpListenerContext context, string? str_data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "utf-8")
+async Task log(string log_data, string log_level = "info", bool flush = false)
+{
+    string log_line = $"[{DateTime.UtcNow:yyyy/MM/dd hh:mm:ss}z][{log_level}]{log_data}";
+    Console.WriteLine(log_line);
+    log_temp.Enqueue(log_line);
+
+    if (log_level != "info" || log_temp.Count > 10 || flush)
+    {
+        StringBuilder sb = new StringBuilder();
+        while (log_temp.Count > 0)
+        {
+            if (log_temp.TryDequeue(out string? line))
+            {
+                sb.AppendLine(line);
+            }
+        }
+        if (!Directory.Exists("logs"))
+        {
+            Directory.CreateDirectory("logs");
+        }
+        await File.AppendAllTextAsync(log_file, sb.ToString());
+    }
+}
+
+void SendResponseString(HttpListenerContext context, string? str_data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "utf-8", string content_disposition = "")
 {
     Encoding encoding;
     try
@@ -93,17 +134,24 @@ void SendResponseString(HttpListenerContext context, string? str_data = null, in
     byte[]? data = null;
     if (!string.IsNullOrEmpty(str_data))
     {
+        str_data = Regex.Replace(str_data, @"\\U([0-9A-F]{8})", match =>
+        {
+            int codePoint = int.Parse(match.Groups[1].Value, System.Globalization.NumberStyles.HexNumber);
+            return char.ConvertFromUtf32(codePoint);
+        });
+
         data = encoding.GetBytes(str_data);
     }
 
-    SendResponse(context, data, status_code, content_type, str_encoding);
+    SendResponse(context, data, status_code, content_type, str_encoding, content_disposition);
 }
 
-async Task<string> GetOriginYAMLAsync(string url)
+async Task<(string, string)> GetOriginYAMLAsync(string url)
 {
     using (HttpClient httpClient = new HttpClient())
     {
-        return await (await httpClient.GetAsync(url)).Content.ReadAsStringAsync();
+        var response = await httpClient.GetAsync(url);
+        return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml");
     }
 }
 
@@ -118,7 +166,14 @@ string CombineYAML(string origin_YAML, string parser_YAML)
         .Build();
 
     var originDict = deserializer.Deserialize<Dictionary<string, object>>(origin_YAML) ?? new();
-    var parserDict = deserializer.Deserialize<List<object>>(parser_YAML)[0] as Dictionary<string, object>;
+
+    var parserList = deserializer.Deserialize<Dictionary<string, object>>(parser_YAML)["parsers"] as List<object>;
+    if (parserList is null)
+    {
+        return serializer.Serialize(originDict);
+    }
+
+    var parserDict = (parserList[0] as Dictionary<object, object>)?["yaml"] as Dictionary<object, object> ?? null;
 
     if (parserDict is null)
     {
@@ -132,33 +187,32 @@ string CombineYAML(string origin_YAML, string parser_YAML)
     return serializer.Serialize(originDict);
 }
 
-void MergeConfig(string type, Dictionary<string, object> parserDict, ref Dictionary<string, object> originDict)
+void MergeConfig(string type, Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
 {
     if (originDict.ContainsKey(type))
     {
-        if (parserDict[$"prepend-{type}"] is not null)
+        if (parserDict.ContainsKey($"prepend-{type}") && parserDict[$"prepend-{type}"] is not null)
         {
-            (originDict[type] as List<object>)!.InsertRange(0, (parserDict[$"prepend-{type}"] as object[])!);
+            (originDict[type] as List<object>)!.InsertRange(0, (parserDict[$"prepend-{type}"] as List<object>)!);
         }
-        if (parserDict[$"append-{type}"] is not null)
+        if (parserDict.ContainsKey($"append-{type}") && parserDict[$"append-{type}"] is not null)
         {
-            (originDict[type] as List<object>)!.AddRange((parserDict[$"append-{type}"] as object[])!);
+            (originDict[type] as List<object>)!.AddRange((parserDict[$"append-{type}"] as List<object>)!);
         }
-
     }
     else
     {
-        if (parserDict[$"prepend-{type}"] is null && parserDict[$"append-{type}"] is not null)
+        if (((!parserDict.ContainsKey($"prepend-{type}") || parserDict[$"prepend-{type}"] is null)) && (parserDict.ContainsKey($"append-{type}") && parserDict[$"append-{type}"] is not null))
         {
-            originDict.Add(type, (parserDict[$"append-{type}"] as object[])!);
+            originDict.Add(type, (parserDict[$"append-{type}"] as List<object>)!);
         }
-        else if (parserDict[$"prepend-{type}"] is not null && parserDict[$"append-{type}"] is null)
+        else if ((parserDict.ContainsKey($"prepend-{type}") && parserDict[$"prepend-{type}"] is not null) && (!parserDict.ContainsKey($"append-{type}") || parserDict[$"append-{type}"] is null))
         {
-            originDict.Add(type, (parserDict[$"prepend-{type}"] as object[])!);
+            originDict.Add(type, (parserDict[$"prepend-{type}"] as List<object>)!);
         }
-        else if (parserDict[$"prepend-{type}"] is not null && parserDict[$"append-{type}"] is not null)
+        else if ((parserDict.ContainsKey($"prepend-{type}") && parserDict[$"prepend-{type}"] is not null) && (parserDict.ContainsKey($"append-{type}") && parserDict[$"append-{type}"] is not null))
         {
-            originDict.Add(type, (parserDict[$"prepend-{type}"] as object[])!.Concat((parserDict[$"append-{type}"] as object[])!));
+            originDict.Add(type, (parserDict[$"prepend-{type}"] as List<object>)!.Concat((parserDict[$"append-{type}"] as List<object>)!));
         }
     }
 }
