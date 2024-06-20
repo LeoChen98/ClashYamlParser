@@ -17,8 +17,8 @@
 - ### misc
     - [x] Subscription-Userinfo (shows usage and expire in Clash for Windows)
     - [x] server log
-    - [ ] SSL connection (HTTPS) **Therefore, if you need to use SSL connections in this service, consider using CDN and returning to the source using HTTP (not HTTPS) protocol.**
-
+    - [x] SSL connection (HTTPS)
+    
 ## Dependencies and Compatibility
 - [.NET 8.0 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/8.0#runtime-8.0.6) is required.
 - Only tested under `Windows 11` and `Windows Server 2012`. Theoretically, it has full platform compatibility.
@@ -29,6 +29,7 @@
 - Download the [latest release](https://github.com/LeoChen98/ClashYamlParser/releases/latest) file.
 - Setup `domain.txt` with the domain you want to bind, the format refer to [Microsoft Learn](https://learn.microsoft.com/zh-cn/dotnet/fundamentals/runtime-libraries/system-net-httplistener), one line per domain.
 - Copy your clash parsers config from Clash for Windows, and create the file `parser.yaml` with it.
+- (If SSL connection needed) Bind the cert with the port using `netsh` tool.
 - Run `ClashYamlParser.exe` with Administrator permission.
 - Subcribe the profile via URL. Example: `http(s)://example.com:port/clash/?url=your origin clash profile url`.
 
