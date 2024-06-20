@@ -38,7 +38,7 @@ jobs:
       - name: build publish exe
         if: env.isexist == ''
         run: |
-          dotnet publish -c Release
+          dotnet publish -p:PublishProfile=FolderProfile -c Release
       - name: Upload Packages(release)
         uses: ncipollo/release-action@v1.12.0
         if: env.isexist == '' && env.suffix == ''
