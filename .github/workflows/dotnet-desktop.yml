@@ -43,7 +43,7 @@ jobs:
         uses: ncipollo/release-action@v1.12.0
         if: env.isexist == '' && env.suffix == ''
         with:
-          artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
+          artifacts: "ClashYamlParser/ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
           name: "${{ env.version }} release"
           tag: "${{ env.version }}"
           generateReleaseNotes: true      
@@ -51,7 +51,7 @@ jobs:
         uses: ncipollo/release-action@v1.12.0
         if: env.isexist == '' && env.suffix != ''
         with:
-          artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
+          artifacts: "ClashYamlParser/ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
           name: "${{ env.version }} ${{ env.suffix }} release"
           tag: "${{ env.version }}-${{ env.suffix }}"
           prerelease: true
