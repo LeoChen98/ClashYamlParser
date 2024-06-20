@@ -1,0 +1,60 @@
+name: .NET Core Desktop
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    strategy:
+      matrix:
+        configuration: [Release]
+
+    runs-on: ubuntu-latest  # For a list of available runner types, refer to
+                             # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: get version
+        run: |
+          echo version=$(cat ClashYamlParser/ClashYamlParser.csproj | grep -oPm1 "(?<=<AssemblyVersion>).*?(?=</AssemblyVersion>)") >> $GITHUB_ENV
+          echo suffix=$(cat ClashYamlParser/ClashYamlParser.csproj | grep -oPm1 "(?<=<VersionSuffix>).*?(?=</VersionSuffix>)") >> $GITHUB_ENV
+      - name: verify exist
+        run: |
+          echo isexist=$(git tag --list ${{ env.version }}) >> $GITHUB_ENV
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        if: env.isexist == ''
+        with:
+          dotnet-version: 8.0.x
+      - name: build publish exe
+        if: env.isexist == ''
+        run: |
+          dotnet publish -p:PublishProfile=FolderProfile -c Release
+      - name: Upload Packages(release)
+        uses: ncipollo/release-action@v1.12.0
+        if: env.isexist == '' && env.suffix == ''
+        with:
+          artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "${{ env.version }} release"
+          tag: "${{ env.version }}"
+          generateReleaseNotes: true      
+      - name: Upload Packages(pre-release)
+        uses: ncipollo/release-action@v1.12.0
+        if: env.isexist == '' && env.suffix != ''
+        with:
+          artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "${{ env.version }} ${{ env.suffix }} release"
+          tag: "${{ env.version }}-${{ env.suffix }}"
+          prerelease: true
+          generateReleaseNotes: true
