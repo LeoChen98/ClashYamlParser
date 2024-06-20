@@ -44,7 +44,6 @@ jobs:
         if: env.isexist == '' && env.suffix == ''
         with:
           artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
-          token: ${{ secrets.GITHUB_TOKEN }}
           name: "${{ env.version }} release"
           tag: "${{ env.version }}"
           generateReleaseNotes: true      
@@ -53,7 +52,6 @@ jobs:
         if: env.isexist == '' && env.suffix != ''
         with:
           artifacts: "ClashYamlParser/bin/Release/net8.0/publish/win-x64/ClashYamlParser.exe"
-          token: ${{ secrets.GITHUB_TOKEN }}
           name: "${{ env.version }} ${{ env.suffix }} release"
           tag: "${{ env.version }}-${{ env.suffix }}"
           prerelease: true
