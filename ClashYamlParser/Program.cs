@@ -209,7 +209,7 @@ void MergeConfig(string type, Dictionary<object, object> parserDict, ref Diction
         }
         if (parserDict.ContainsKey($"mix-{type}") && parserDict[$"mix-{type}"] is not null)
         {
-            (originDict[type] as List<object>)!.AddRange((parserDict[$"mix-{type}"] as List<object>)!);
+            (originDict[type] as Dictionary<object, object>)!.Concat((parserDict[$"mix-{type}"] as Dictionary<object, object>)!);
         }
     }
     else
@@ -229,7 +229,7 @@ void MergeConfig(string type, Dictionary<object, object> parserDict, ref Diction
 
         if (parserDict.ContainsKey($"mix-{type}") && parserDict[$"mix-{type}"] is not null)
         {
-            originDict.Add(type, (parserDict[$"mix-{type}"] as List<object>)!);
+            originDict.Add(type, (parserDict[$"mix-{type}"] as Dictionary<object, object>)!);
         }
     }
 }
