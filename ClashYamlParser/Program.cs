@@ -9,7 +9,7 @@ using YamlDotNet.Serialization.NamingConventions;
 ConcurrentQueue<string> log_temp = new();
 string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
 
-await log($"{Assembly.GetExecutingAssembly().GetName().Version}","version");
+await log($"{Assembly.GetExecutingAssembly().GetName().Version}", "version");
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
@@ -188,6 +188,9 @@ string CombineYAML(string origin_YAML, string parser_YAML)
     MergeConfig("rules", parserDict, ref originDict);
     MergeConfig("proxies", parserDict, ref originDict);
     MergeConfig("proxy-groups", parserDict, ref originDict);
+    MergeConfig("proxy-providers", parserDict, ref originDict);
+    MergeConfig("rule-providers", parserDict, ref originDict);
+    MixObject(parserDict, ref originDict);
 
     return serializer.Serialize(originDict);
 }
@@ -204,6 +207,10 @@ void MergeConfig(string type, Dictionary<object, object> parserDict, ref Diction
         {
             (originDict[type] as List<object>)!.AddRange((parserDict[$"append-{type}"] as List<object>)!);
         }
+        if (parserDict.ContainsKey($"mix-{type}") && parserDict[$"mix-{type}"] is not null)
+        {
+            (originDict[type] as List<object>)!.AddRange((parserDict[$"mix-{type}"] as List<object>)!);
+        }
     }
     else
     {
@@ -218,6 +225,44 @@ void MergeConfig(string type, Dictionary<object, object> parserDict, ref Diction
         else if ((parserDict.ContainsKey($"prepend-{type}") && parserDict[$"prepend-{type}"] is not null) && (parserDict.ContainsKey($"append-{type}") && parserDict[$"append-{type}"] is not null))
         {
             originDict.Add(type, (parserDict[$"prepend-{type}"] as List<object>)!.Concat((parserDict[$"append-{type}"] as List<object>)!));
+        }
+
+        if (parserDict.ContainsKey($"mix-{type}") && parserDict[$"mix-{type}"] is not null)
+        {
+            originDict.Add(type, (parserDict[$"mix-{type}"] as List<object>)!);
+        }
+    }
+}
+
+void MixObject(Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
+{
+    if (!parserDict.ContainsKey("mix-object"))
+    {
+        return;
+    }
+
+    if (parserDict["mix-object"] is not Dictionary<object, List<object>> objs || objs.Count == 0)
+    {
+        return;
+    }
+
+    foreach (var obj in objs)
+    {
+        if (originDict.ContainsKey((string)obj.Key))
+        {
+            if(originDict[((string)obj.Key)] is List<object> values)
+            {
+                values.AddRange(obj.Value);
+                continue;
+            }
+            log($"mix-object: {obj.Key} failed, trying to create the note.", "warning", true).GetAwaiter().GetResult();
+            originDict[((string)obj.Key)] = obj.Value;
+            continue;
+        }
+
+        if(!originDict.TryAdd((string)obj.Key, obj.Value))
+        {
+            log($"mix-object: {obj.Key} failed, skipped.", "warning", true).GetAwaiter().GetResult();
         }
     }
 }
