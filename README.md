@@ -13,6 +13,9 @@
     - [x] append-proxies
     - [x] prepend-proxy-groups
     - [x] append-proxy-groups
+    - [x] mix-proxy-providers
+    - [x] mix-rule-providers
+    - [x] mix-object
     - [ ] command
 - ### misc
     - [x] Subscription-Userinfo (shows usage and expire in Clash for Windows)
