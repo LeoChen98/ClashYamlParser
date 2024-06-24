@@ -13,6 +13,9 @@
     - [x] append-proxies
     - [x] prepend-proxy-groups
     - [x] append-proxy-groups
+    - [x] mix-proxy-providers
+    - [x] mix-rule-providers
+    - [x] mix-object
     - [ ] command
 - ### 杂项
     - [x] Subscription-Userinfo (用于在Clash for Windows中显示使用数据和有效期)
