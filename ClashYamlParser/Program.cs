@@ -10,6 +10,7 @@ ConcurrentQueue<string> log_temp = new();
 string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
 
 await log($"{Assembly.GetExecutingAssembly().GetName().Version}", "version");
+Timer log_wraper = new(async (o) => { await WrapLogAsync(); }, null, TimeSpan.TicksPerMinute, Timeout.Infinite);
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
@@ -31,6 +32,23 @@ await Task.Run(async () =>
 
     await log("Application exited.", flush: true);
 });
+
+async Task WrapLogAsync()
+{
+    StringBuilder sb = new StringBuilder();
+    while (log_temp.Count > 0)
+    {
+        if (log_temp.TryDequeue(out string? line))
+        {
+            sb.AppendLine(line);
+        }
+    }
+    if (!Directory.Exists("logs"))
+    {
+        Directory.CreateDirectory("logs");
+    }
+    await File.AppendAllTextAsync(log_file, sb.ToString());
+}
 
 async void ProcessRequest(IAsyncResult ar)
 {
@@ -102,25 +120,14 @@ void SendResponse(HttpListenerContext context, byte[]? data = null, int status_c
 
 async Task log(string log_data, string log_level = "info", bool flush = false)
 {
-    string log_line = $"[{DateTime.UtcNow:yyyy/MM/dd hh:mm:ss}z][{log_level}]{log_data}";
+    //string log_line = $"[{DateTime.UtcNow:yyyy/MM/dd hh:mm:ss}z][{log_level}]{log_data}";
+    string log_line = string.Format(string.Concat("[{0:yyyy/MM/dd HH:mm:ss}z][{1}]{2}"), DateTime.UtcNow, log_level, log_data);
     Console.WriteLine(log_line);
     log_temp.Enqueue(log_line);
 
     if (log_level != "info" || log_temp.Count > 10 || flush)
     {
-        StringBuilder sb = new StringBuilder();
-        while (log_temp.Count > 0)
-        {
-            if (log_temp.TryDequeue(out string? line))
-            {
-                sb.AppendLine(line);
-            }
-        }
-        if (!Directory.Exists("logs"))
-        {
-            Directory.CreateDirectory("logs");
-        }
-        await File.AppendAllTextAsync(log_file, sb.ToString());
+        await WrapLogAsync();
     }
 }
 
@@ -250,7 +257,7 @@ void MixObject(Dictionary<object, object> parserDict, ref Dictionary<string, obj
     {
         if (originDict.ContainsKey((string)obj.Key))
         {
-            if(originDict[((string)obj.Key)] is List<object> values)
+            if (originDict[((string)obj.Key)] is List<object> values)
             {
                 values.AddRange(obj.Value);
                 continue;
@@ -260,7 +267,7 @@ void MixObject(Dictionary<object, object> parserDict, ref Dictionary<string, obj
             continue;
         }
 
-        if(!originDict.TryAdd((string)obj.Key, obj.Value))
+        if (!originDict.TryAdd((string)obj.Key, obj.Value))
         {
             log($"mix-object: {obj.Key} failed, skipped.", "warning", true).GetAwaiter().GetResult();
         }
