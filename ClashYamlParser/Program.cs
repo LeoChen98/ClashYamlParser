@@ -10,7 +10,7 @@ ConcurrentQueue<string> log_temp = new();
 string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
 
 await log($"{Assembly.GetExecutingAssembly().GetName().Version}", "version");
-Timer log_wraper = new(async (o) => { await WrapLogAsync(); }, null, TimeSpan.TicksPerMinute, Timeout.Infinite);
+Timer log_wraper = new(async (o) => { await WrapLogAsync(); }, null, TimeSpan.TicksPerMinute, TimeSpan.TicksPerMinute);
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
