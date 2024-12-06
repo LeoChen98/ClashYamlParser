@@ -8,9 +8,11 @@ using YamlDotNet.Serialization.NamingConventions;
 
 ConcurrentQueue<string> log_temp = new();
 string log_file = $"logs\\{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.log";
+List<string> blacklist = [];
 
 await log($"{Assembly.GetExecutingAssembly().GetName().Version}", "version");
 Timer log_wraper = new(async (o) => { await WrapLogAsync(); }, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+Timer blacklist_refresher = new(async (o) => { await LoadBlacklist(); }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
 
 HttpListener server = new HttpListener();
 server.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
@@ -32,6 +34,38 @@ await Task.Run(async () =>
 
     await log("Application exited.", flush: true);
 });
+
+async Task LoadBlacklist()
+{
+    if (!File.Exists("blacklist.txt"))
+    {
+        return;
+    }
+
+    string[] backup = new string[blacklist.Capacity];
+    blacklist.CopyTo(backup);
+    blacklist = new(blacklist.Capacity);
+    try
+    {
+        using HttpClient httpClient = new();
+        Regex regex = RegexDomain();
+        foreach (string line in await File.ReadAllLinesAsync("blacklist.txt"))
+        {
+            HttpResponseMessage response = await httpClient.GetAsync(line);
+            if (response.IsSuccessStatusCode)
+            {
+                foreach (Match m in regex.Matches(await response.Content.ReadAsStringAsync()))
+                {
+                    blacklist.Add(string.Format("DOMAIN-SUFFIX,{0},REJECT", m.Value));
+                }
+            }
+        }
+    }
+    catch
+    {
+        blacklist = [.. backup];
+    }
+}
 
 async Task WrapLogAsync()
 {
@@ -160,11 +194,10 @@ void SendResponseString(HttpListenerContext context, string? str_data = null, in
 
 async Task<(string, string, string)> GetOriginYAMLAsync(string url)
 {
-    using (HttpClient httpClient = new HttpClient())
-    {
-        var response = await httpClient.GetAsync(url);
-        return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml", response.Headers.GetValues("Subscription-Userinfo").First());
-    }
+    using HttpClient httpClient = new();
+    var response = await httpClient.GetAsync(url);
+    response.EnsureSuccessStatusCode();
+    return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml", response.Headers.GetValues("Subscription-Userinfo").First());
 }
 
 string CombineYAML(string origin_YAML, string parser_YAML)
@@ -199,7 +232,21 @@ string CombineYAML(string origin_YAML, string parser_YAML)
     MergeConfig("rule-providers", parserDict, ref originDict);
     MixObject(parserDict, ref originDict);
 
+    AddAdBlocker(ref originDict);
+
     return serializer.Serialize(originDict);
+}
+
+void AddAdBlocker(ref Dictionary<string, object> originDict)
+{
+    if (!originDict.TryGetValue("rules", out object? value))
+    {
+        originDict.Add("rules", blacklist);
+    }
+    else
+    {
+        (value as List<object>)!.InsertRange(0, blacklist);
+    }
 }
 
 void MergeConfig(string type, Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
@@ -272,4 +319,14 @@ void MixObject(Dictionary<object, object> parserDict, ref Dictionary<string, obj
             log($"mix-object: {obj.Key} failed, skipped.", "warning", true).GetAwaiter().GetResult();
         }
     }
+}
+
+partial class Program
+{
+    #region Private Methods
+
+    [GeneratedRegex(@"\b((?:(?:[a-zA-Z0-9-]{1,63}\.)+(?:[a-zA-Z]{2,})))\b")]
+    private static partial Regex RegexDomain();
+
+    #endregion Private Methods
 }

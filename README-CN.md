@@ -28,13 +28,16 @@
 - 仅在 `Clash for Windows` 和 `Clash for Android`中测试通过。理论上可用于Clash的所有分支版本
  
 ## 开始使用
-*一下提到的所有路径均为相对于 `ClashYamlParser.exe` 的根目录*.
+*以下提到的所有路径均为相对于 `ClashYamlParser.exe` 的根目录*.
 - 下载 [最新的发行](https://github.com/LeoChen98/ClashYamlParser/releases/latest) 文件。
 - 根据 [Microsoft Learn](https://learn.microsoft.com/zh-cn/dotnet/fundamentals/runtime-libraries/system-net-httplistener) 的格式设置`domain.txt`，每行一个域名。
 - 从Clash for Windows中复制parsers配置，新建并粘贴到 `parser.yaml`中。
 - （如果需要使用SSL连接）使用 `netsh` 工具将对应证书绑定到端口。
 - 用管理员权限运行 `ClashYamlParser.exe` 。
 - 通过URL订阅配置。例如： `http(s)://example.com:port/clash/?url=your origin clash profile url`.
+
+- *（可选）设置黑名单*：在运行目录中新建`blacklist.txt`文件，并向其中添加黑名单列表地址。（每行一个，仅支持http(s)地址，列表文件中所有符合域名规则的域名都会被加入黑名单，请注意不要采用携带其他信息的列表）
+
 
 ## 贡献
 欢迎提出Issue和Pull Request，最好是直接提Pull Request。（懒死了.jpg）

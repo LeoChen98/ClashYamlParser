@@ -35,6 +35,7 @@
 - (If SSL connection needed) Bind the cert with the port using `netsh` tool.
 - Run `ClashYamlParser.exe` with Administrator permission.
 - Subcribe the profile via URL. Example: `http(s)://example.com:port/clash/?url=your origin clash profile url`.
+- *(Optional)Add black list:* Add `blacklist.txt` under excutepath, list your blacklist source one each line.(Only http(s)link is supported, and all domain names in the list file that comply with domain name rules will be added to the blacklist.)
 
 ## How to contribute
 Issues and pull requests are both welcome, **pull requests prefered**.
