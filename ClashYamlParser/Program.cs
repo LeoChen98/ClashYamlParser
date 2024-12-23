@@ -225,14 +225,14 @@ string CombineYAML(string origin_YAML, string parser_YAML)
         return serializer.Serialize(originDict);
     }
 
+    AddAdBlocker(ref originDict);
+
     MergeConfig("rules", parserDict, ref originDict);
     MergeConfig("proxies", parserDict, ref originDict);
     MergeConfig("proxy-groups", parserDict, ref originDict);
     MergeConfig("proxy-providers", parserDict, ref originDict);
     MergeConfig("rule-providers", parserDict, ref originDict);
     MixObject(parserDict, ref originDict);
-
-    AddAdBlocker(ref originDict);
 
     return serializer.Serialize(originDict);
 }
