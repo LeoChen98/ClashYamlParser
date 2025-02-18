@@ -70,7 +70,7 @@ async Task LoadBlacklist()
 async Task WrapLogAsync()
 {
     StringBuilder sb = new StringBuilder();
-    while (log_temp.Count > 0)
+    while (!log_temp.IsEmpty)
     {
         if (log_temp.TryDequeue(out string? line))
         {
@@ -100,13 +100,13 @@ async void ProcessRequest(IAsyncResult ar)
             case "/clash/":
                 string? subscribe_url = context.Request.QueryString["url"];
                 ArgumentException.ThrowIfNullOrWhiteSpace(subscribe_url, "url");
-                var origin_response = await GetOriginYAMLAsync(subscribe_url);
-                string origin_YAML = origin_response.Item1;
-                string parser_YAML = await File.ReadAllTextAsync("parser.yaml", Encoding.UTF8);
-                string result_YAML = CombineYAML(origin_YAML, parser_YAML);
+                var origin_response = await GetOriginYamlAsync(subscribe_url);
+                string origin_yaml = origin_response.Item1;
+                string parser_yaml = await File.ReadAllTextAsync("parser.yaml", Encoding.UTF8);
+                string result_yaml = CombineYaml(origin_yaml, parser_yaml);
                 context.Response.Headers.Add("Cache-Control", "no-cache");
                 context.Response.Headers.Add("Subscription-Userinfo", origin_response.Item3);
-                SendResponseString(context, result_YAML, content_type: "application/octet-stream", content_disposition: $"attachment; filename={origin_response.Item2}");
+                SendResponseString(context, result_yaml, contentType: "application/octet-stream", contentDisposition: $"attachment; filename={origin_response.Item2}");
                 break;
 
             default:
@@ -126,22 +126,22 @@ async void ProcessRequest(IAsyncResult ar)
         await log($"Internal Exception:{ex.Message}", "error");
     }
 }
-void SendResponse(HttpListenerContext context, byte[]? data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "", string content_disposition = "")
+void SendResponse(HttpListenerContext context, byte[]? data = null, int statusCode = 200, string contentType = "text/plain", string strEncoding = "", string contentDisposition = "")
 {
-    context.Response.StatusCode = status_code;
+    context.Response.StatusCode = statusCode;
 
-    if (!string.IsNullOrEmpty(content_disposition))
+    if (!string.IsNullOrEmpty(contentDisposition))
     {
-        context.Response.AddHeader("Content-Disposition", content_disposition);
+        context.Response.AddHeader("Content-Disposition", contentDisposition);
     }
 
-    if (string.IsNullOrEmpty(str_encoding))
+    if (string.IsNullOrEmpty(strEncoding))
     {
-        context.Response.ContentType = $"{content_type}";
+        context.Response.ContentType = $"{contentType}";
     }
     else
     {
-        context.Response.ContentType = $"{content_type}; chartset={str_encoding}";
+        context.Response.ContentType = $"{contentType}; chartset={strEncoding}";
     }
 
     if (data is not null && data.Length > 0)
@@ -152,25 +152,25 @@ void SendResponse(HttpListenerContext context, byte[]? data = null, int status_c
     context.Response.Close();
 }
 
-async Task log(string log_data, string log_level = "info", bool flush = false)
+async Task log(string logData, string logLevel = "info", bool flush = false)
 {
     //string log_line = $"[{DateTime.UtcNow:yyyy/MM/dd hh:mm:ss}z][{log_level}]{log_data}";
-    string log_line = string.Format(string.Concat("[{0:yyyy/MM/dd HH:mm:ss}z][{1}]{2}"), DateTime.UtcNow, log_level, log_data);
+    string log_line = string.Format(string.Concat("[{0:yyyy/MM/dd HH:mm:ss}z][{1}]{2}"), DateTime.UtcNow, logLevel, logData);
     Console.WriteLine(log_line);
     log_temp.Enqueue(log_line);
 
-    if (log_level != "info" || log_temp.Count > 10 || flush)
+    if (logLevel != "info" || log_temp.Count > 10 || flush)
     {
         await WrapLogAsync();
     }
 }
 
-void SendResponseString(HttpListenerContext context, string? str_data = null, int status_code = 200, string content_type = "text/plain", string str_encoding = "utf-8", string content_disposition = "")
+void SendResponseString(HttpListenerContext context, string? strData = null, int statusCode = 200, string contentType = "text/plain", string strEncoding = "utf-8", string contentDisposition = "")
 {
     Encoding encoding;
     try
     {
-        encoding = Encoding.GetEncoding(str_encoding);
+        encoding = Encoding.GetEncoding(strEncoding);
     }
     catch
     {
@@ -178,21 +178,21 @@ void SendResponseString(HttpListenerContext context, string? str_data = null, in
     }
 
     byte[]? data = null;
-    if (!string.IsNullOrEmpty(str_data))
+    if (!string.IsNullOrEmpty(strData))
     {
-        str_data = Regex.Replace(str_data, @"\\U([0-9A-F]{8})", match =>
+        strData = Regex.Replace(strData, @"\\U([0-9A-F]{8})", match =>
         {
             int codePoint = int.Parse(match.Groups[1].Value, System.Globalization.NumberStyles.HexNumber);
             return char.ConvertFromUtf32(codePoint);
         });
 
-        data = encoding.GetBytes(str_data);
+        data = encoding.GetBytes(strData);
     }
 
-    SendResponse(context, data, status_code, content_type, str_encoding, content_disposition);
+    SendResponse(context, data, statusCode, contentType, strEncoding, contentDisposition);
 }
 
-async Task<(string, string, string)> GetOriginYAMLAsync(string url)
+async Task<(string, string, string)> GetOriginYamlAsync(string url)
 {
     using HttpClient httpClient = new();
     var response = await httpClient.GetAsync(url);
@@ -200,7 +200,7 @@ async Task<(string, string, string)> GetOriginYAMLAsync(string url)
     return (await response.Content.ReadAsStringAsync(), response.Content.Headers.ContentDisposition?.FileName ?? "clash.xaml", response.Headers.GetValues("Subscription-Userinfo").First());
 }
 
-string CombineYAML(string origin_YAML, string parser_YAML)
+string CombineYaml(string originYaml, string parserYaml)
 {
     var deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -210,9 +210,9 @@ string CombineYAML(string origin_YAML, string parser_YAML)
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .Build();
 
-    var originDict = deserializer.Deserialize<Dictionary<string, object>>(origin_YAML) ?? new();
+    var originDict = deserializer.Deserialize<Dictionary<string, object>>(originYaml) ?? new();
 
-    var parserList = deserializer.Deserialize<Dictionary<string, object>>(parser_YAML)["parsers"] as List<object>;
+    var parserList = deserializer.Deserialize<Dictionary<string, object>>(parserYaml)["parsers"] as List<object>;
     if (parserList is null)
     {
         return serializer.Serialize(originDict);
@@ -229,7 +229,7 @@ string CombineYAML(string origin_YAML, string parser_YAML)
 
     MergeConfig("rules", parserDict, ref originDict);
     MergeConfig("proxies", parserDict, ref originDict);
-    MergeConfig("proxy-groups", parserDict, ref originDict);
+    MergeGroups( parserDict, ref originDict);
     MergeConfig("proxy-providers", parserDict, ref originDict);
     MergeConfig("rule-providers", parserDict, ref originDict);
     MixObject(parserDict, ref originDict);
@@ -247,6 +247,39 @@ void AddAdBlocker(ref Dictionary<string, object> originDict)
     {
         (value as List<object>)!.InsertRange(0, blacklist);
     }
+}
+
+void MergeGroups(Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
+{
+    MergeConfig("proxy-groups",parserDict,ref originDict);
+
+    if (!originDict.ContainsKey("proxy-groups")) return;
+    if (originDict["proxy-groups"] is not List<Dictionary<string, object>> proxyGroups) return;
+    
+    var mergedGroups = new Dictionary<string, Dictionary<string, object>>();
+    foreach (var group in proxyGroups)
+    {
+        if (group.TryGetValue("name", out var name) && name is string groupName)
+        {
+            if (mergedGroups.ContainsKey(groupName))
+            {
+                if( group["proxies"] is not string[]) continue;
+                foreach (var kvp in (group["proxies"] as string[])!)
+                {
+                    if(mergedGroups[groupName]["proxies"] is not List<string>)
+                    {
+                        mergedGroups[groupName]["proxies"] = new List<string>();
+                    }
+                    (mergedGroups[groupName]["proxies"] as List<string>)!.Add(kvp) ;
+                }
+            }
+            else
+            {
+                mergedGroups[groupName] = new Dictionary<string, object>(group);
+            }
+        }
+    }
+    originDict["proxy-groups"] = mergedGroups.Values.ToList();
 }
 
 void MergeConfig(string type, Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
@@ -290,12 +323,12 @@ void MergeConfig(string type, Dictionary<object, object> parserDict, ref Diction
 
 void MixObject(Dictionary<object, object> parserDict, ref Dictionary<string, object> originDict)
 {
-    if (!parserDict.ContainsKey("mix-object"))
+    if (!parserDict.TryGetValue("mix-object", out var mix_object))
     {
         return;
     }
 
-    if (parserDict["mix-object"] is not Dictionary<object, List<object>> objs || objs.Count == 0)
+    if (mix_object is not Dictionary<object, List<object>> objs || objs.Count == 0)
     {
         return;
     }
